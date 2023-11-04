@@ -1,0 +1,62 @@
+﻿@{
+    ViewBag.Title = "iWatermark";
+}
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <h3 class="mb-4">Adicionar marca d'água</h3>
+
+            @using (Html.BeginForm("AddWatermark", "Home", FormMethod.Post, new { enctype = "multipart/form-data" }))
+            {
+                <div class="form-group mb-4">
+                    <label for="logo">Selecione sua logomarca:</label>
+                    <input type="file" class="form-control" name="logo" required />
+                </div>
+
+                <div class="form-group mb-4">
+                    <label for="images">Selecione as imagens para adicionar a marca d'água:</label>
+                    <input type="file" class="form-control" name="images" multiple required />
+                </div>
+
+                <button type="submit" class="btn btn-primary">Adicionar</button>
+            }
+        </div>
+    </div>
+</div>
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div id="Error" class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <h3 class="mt-4">Erro</h3>
+                <div class="alert alert-danger mb-4">
+                    <p>@TempData["ErrorMessage"]</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div id="Success" class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <h3 class="mt-4">Sucesso</h3>
+                <div class="alert alert-success mb-4">
+                    <p>@TempData["SuccessMessage"]</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<script>
+    document.getElementsByTagName("Form")[0].addEventListener("submit", function () {
+        document.getElementById('Error').remove();
+        document.getElementById('Success').remove();
+    });
+
+</script>
