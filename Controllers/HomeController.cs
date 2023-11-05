@@ -27,13 +27,13 @@ namespace iWatermark.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddWatermark(IFormFile logo, List<IFormFile> images)
+        public IActionResult AddWatermark(Watermark watermark)
         {
             try
             {
-                ValidateParameters(logo, images);
+                ValidateParameters();
 
-                List<byte[]> processedImages = GetProcessedImages(logo, images);
+                List<byte[]> processedImages = GetProcessedImages(watermark);
 
                 MemoryStream zipFiles = GetZippedFile(processedImages);
                 var zipFileName = "images.zip";
@@ -45,55 +45,55 @@ namespace iWatermark.Controllers
             }
             catch (Exception e)
             {
-                TempData["ErrorMessage"] = "Ocorreu um erro ao processar as imagens:\n" + e.Message;
-                return View(nameof(Index));
+                TempData["ErrorMessage"] = "Ocorreu um erro ao processar as imagens:";
+                TempData["ErrorMessageException"] = e.Message;
+                return View(nameof(Index), watermark);
             }
         }
 
-        private void ValidateParameters(IFormFile logo, List<IFormFile> images)
+        private void ValidateParameters()
         {
-            if (logo == null || images == null || images.Count == 0)
+            if (!ModelState.IsValid)
             {
-                throw new ArgumentException("Ambas as imagens devem ser fornecidas.");
+                throw new ArgumentException("Informações em vermelho são necessária.");
             }
         }
 
-        private List<byte[]> GetProcessedImages(IFormFile logo, List<IFormFile> images)
+        private List<byte[]> GetProcessedImages(Watermark watermark)
         {
-            using var logoImage = new MagickImage(logo.OpenReadStream());
+            using var logoImage = new MagickImage(watermark.Logomarca.OpenReadStream());
             logoImage.Format = MagickFormat.Svg;
 
             List<byte[]> processedImages = new List<byte[]>();
 
-            Parallel.ForEach(images, image =>
+            Parallel.ForEach(watermark.Images, image =>
             {
-                ProcessImage(image, logoImage, processedImages);
+                ProcessImage(image, logoImage, watermark.ParametrosWaterMark, processedImages);
             });
 
             return processedImages;
         }
 
-        private void ProcessImage(IFormFile image, IMagickImage<ushort> logoImage, List<byte[]> processedImages)
+        private void ProcessImage(IFormFile image, IMagickImage<ushort> logoImage, ParametrosWaterMark parametrosWaterMark, List<byte[]> processedImages)
         {
-            using var imageToiWatermark = new MagickImage(image.OpenReadStream());
+            using var imageToWatermark = new MagickImage(image.OpenReadStream());
 
-            double maxLogoSize = GetMaxLogoSize(imageToiWatermark);
+            double maxLogoSize = GetMaxLogoSize(imageToWatermark, parametrosWaterMark);
             double iWatermarkScale = GetiWatermarkScale(maxLogoSize, logoImage);
-            IMagickImage<ushort> iWatermarkClone = GetResizediWatermark(iWatermarkScale, logoImage);
+            IMagickImage<ushort> watermarkClone = GetResizediWatermark(iWatermarkScale, logoImage);
 
-            SetOpacityToiWatermark(iWatermarkClone, 2);
+            SetOpacityToiWatermark(watermarkClone, parametrosWaterMark.OpacidadeLogomarca);
 
-            int imgCenterX = (imageToiWatermark.Width - iWatermarkClone.Width) / 2;
-            int imgCenterY = (imageToiWatermark.Height - iWatermarkClone.Height) / 2;
-            ComposeiWatermarkToImage(imageToiWatermark, iWatermarkClone, imgCenterX, imgCenterY, CompositeOperator.Over);
+            var watermarkPosition = GetWatermarkPosition(imageToWatermark, watermarkClone, parametrosWaterMark);
+            ComposeiWatermarkToImage(imageToWatermark, watermarkClone, watermarkPosition.X, watermarkPosition.Y, CompositeOperator.Over);
 
-            byte[] newImg = GetNewImage(imageToiWatermark, 100, MagickFormat.Png);
+            byte[] newImg = GetNewImage(imageToWatermark, 100, FormatoSaidaEnumClass.GetMagickFormat(parametrosWaterMark.FormatoSaida));
             processedImages.Add(newImg);
         }
 
-        private double GetMaxLogoSize(MagickImage imageToiWatermark)
+        private double GetMaxLogoSize(MagickImage imageToWatermark, ParametrosWaterMark parametrosWaterMark)
         {
-            return Math.Min(imageToiWatermark.Width * 0.5, imageToiWatermark.Height * 0.5);
+            return Math.Min(imageToWatermark.Width * parametrosWaterMark.GetProporcaoLogomarca(), imageToWatermark.Height * parametrosWaterMark.GetProporcaoLogomarca());
         }
 
         private double GetiWatermarkScale(double maxLogoSize, IMagickImage<ushort> logoImage)
@@ -103,32 +103,66 @@ namespace iWatermark.Controllers
 
         private IMagickImage<ushort> GetResizediWatermark(double iWatermarkScale, IMagickImage<ushort> logoImage)
         {
-            IMagickImage<ushort> iWatermarkClone = logoImage.Clone();
+            IMagickImage<ushort> watermarkClone = logoImage.Clone();
 
-            int scaledWidth = (int)(iWatermarkClone.Width * iWatermarkScale);
-            int scaledHeight = (int)(iWatermarkClone.Height * iWatermarkScale);
-            iWatermarkClone.Resize(scaledWidth, scaledHeight);
+            int scaledWidth = (int)(watermarkClone.Width * iWatermarkScale);
+            int scaledHeight = (int)(watermarkClone.Height * iWatermarkScale);
+            watermarkClone.Resize(scaledWidth, scaledHeight);
 
-            return iWatermarkClone;
+            return watermarkClone;
         }
 
-        private void SetOpacityToiWatermark(IMagickImage<ushort> iWatermarkClone, int opacity)
+        private (int X, int Y) GetWatermarkPosition(IMagickImage<ushort> imageToWatermark, IMagickImage<ushort> watermarkClone, ParametrosWaterMark parametrosWaterMark)
         {
-            iWatermarkClone.Evaluate(Channels.Alpha, EvaluateOperator.Divide, opacity);
+            int imgX = 0;
+            int imgY = 0;
+            
+            switch (parametrosWaterMark.PosicaoLogomarca)
+            {                
+                case PosicaoLogomarcaEnum.Centro:
+                    imgX = (imageToWatermark.Width - watermarkClone.Width) / 2;
+                    imgY = (imageToWatermark.Height - watermarkClone.Height) / 2;
+                    break;
+                case PosicaoLogomarcaEnum.DireitaInferior:
+                    imgX = imageToWatermark.Width - watermarkClone.Width;
+                    imgY = imageToWatermark.Height - watermarkClone.Height;
+                    break;
+                case PosicaoLogomarcaEnum.EsquerdaInferior:
+                    imgX = 0;
+                    imgY = imageToWatermark.Height - watermarkClone.Height;
+                    break;
+                case PosicaoLogomarcaEnum.DireitaSuperior:
+                    imgX = imageToWatermark.Width - watermarkClone.Width;
+                    imgY = 0;
+                    break;
+                case PosicaoLogomarcaEnum.EsquerdaSuperior:
+                    imgX = 0;
+                    imgY = 0;
+                    break;
+                default:
+                    throw new Exception("GetWatermarkPosition() not implemented!");                    
+            }
+
+            return (imgX, imgY);
         }
 
-        private void ComposeiWatermarkToImage(IMagickImage<ushort> imageToiWatermark, IMagickImage<ushort> iWatermarkClone, int imgCenterX, int imgCenterY, CompositeOperator compositeOperator)
+        private void SetOpacityToiWatermark(IMagickImage<ushort> watermarkClone, int opacity)
         {
-            imageToiWatermark.Composite(iWatermarkClone, imgCenterX, imgCenterY, compositeOperator);
+            watermarkClone.Evaluate(Channels.Alpha, EvaluateOperator.Divide, opacity);
         }
 
-        private byte[] GetNewImage(IMagickImage<ushort> imageToiWatermark, int quality, MagickFormat imgFormat)
+        private void ComposeiWatermarkToImage(IMagickImage<ushort> imageToWatermark, IMagickImage<ushort> watermarkClone, int imgCenterX, int imgCenterY, CompositeOperator compositeOperator)
+        {
+            imageToWatermark.Composite(watermarkClone, imgCenterX, imgCenterY, compositeOperator);
+        }
+
+        private byte[] GetNewImage(IMagickImage<ushort> imageToWatermark, int quality, MagickFormat imgFormat)
         {
             using var outputImageStream = new MemoryStream();
 
-            imageToiWatermark.Quality = quality;
-            imageToiWatermark.Format = imgFormat;
-            imageToiWatermark.Write(outputImageStream);
+            imageToWatermark.Quality = quality;
+            imageToWatermark.Format = imgFormat;
+            imageToWatermark.Write(outputImageStream);
 
             return outputImageStream.ToArray();
         }
