@@ -19,4 +19,11 @@ Seja bem-vindo ao iWatermark, um aplicativo intuitivo para adicionar logomarca a
 - **Arquitetura:** MVC
 - **UI:** Bootstrap
 
+## Configurações Personalizadas
+
+- **Posição da Logomarca:** Escolha o local onde deseja aplicar sua logomarca em cada foto.
+- **Formato de Saída:** Selecione o formato desejado para as imagens finais.
+- **Opacidade da Logomarca:** Ajuste a transparência para garantir uma integração perfeita com suas fotos.
+- **Proporção da Logomarca:** Mantenha o equilíbrio ideal entre o tamanho da logomarca e a foto anexada.
+
 Aprecie a facilidade de personalizar suas imagens em lote com o iWatermark!
