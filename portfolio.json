@@ -1,0 +1,17 @@
+{
+  "title": "iWatermark — Adição de logomarca em imagens em lote",
+  "impact": "↑ 500+ imagens processadas em segundos via paralelismo",
+  "techStack": [
+    "C#",
+    "System.Drawing",
+    "Parallel"
+  ],
+  "diff": {
+    "before": "edição manual imagem por imagem",
+    "added": [
+      "Processamento paralelo, centenas de imagens em segundos",
+      "Suporte a PNG, JPG, BMP e WebP",
+      "Marca d'água: posição, opacidade e escala configuráveis"
+    ]
+  }
+}
