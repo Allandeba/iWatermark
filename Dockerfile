@@ -1,23 +1,20 @@
-ARG ARCH=amd64
-ARG VERSION=7.0
-ARG TAG=$VERSION-bullseye-slim-$ARCH
-FROM mcr.microsoft.com/dotnet/sdk:$VERSION AS build
-WORKDIR /app
-
-EXPOSE 80 443
-
-# copy csproj and restore as distinct layers
-COPY *.csproj .
-RUN dotnet restore
-
-# copy everything else and build app
+# syntax=docker/dockerfile:1
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY iWatermark.csproj ./
+RUN dotnet restore iWatermark.csproj
 COPY . .
-WORKDIR /app
-RUN dotnet publish -c release -o out --no-restore --no-cache /restore
+RUN dotnet publish iWatermark.csproj -c Release --no-restore -o /out /p:UseAppHost=false
 
-# final stage/image
-FROM mcr.microsoft.com/dotnet/aspnet:$TAG
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-
-COPY --from=build /app/out .
+COPY --from=build /out/ ./
+USER $APP_UID
+ENV ASPNETCORE_HTTP_PORTS=8080
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl --fail --silent --max-time 4 --output /dev/null http://127.0.0.1:8080/ || exit 1
 ENTRYPOINT ["dotnet", "iWatermark.dll"]
