@@ -10,23 +10,6 @@ Seja bem-vindo ao iWatermark, um aplicativo intuitivo para adicionar logomarca a
 
 **Para experimentar o sistema, acesse: [iwatermark.allandeba.dev.br](https://iwatermark.allandeba.dev.br)**
 
-
-## Tecnologias Utilizadas
-
-- **Framework:** ASP.NET Core 10.0
-- **Conteinerização:** Docker
-- **Hospedagem:** Coolify em Linux
-- **Arquitetura:** MVC
-- **UI:** Bootstrap
-
-## Deploy no Coolify
-
-Use o build pack **Dockerfile**, com `Dockerfile` na raiz e porta interna `8080`.
-O proxy do Coolify recebe o HTTPS; o app atende por HTTP dentro do contêiner.
-O health check consulta `GET /` na porta interna. O app não requer banco de dados,
-volume de uploads ou segredos de build. O build e a publicação são feitos pelo
-Coolify, sem GitHub Actions.
-
 ## Configurações Personalizadas
 
 - **Posição da Logomarca:** Escolha o local onde deseja aplicar sua logomarca em cada foto.
