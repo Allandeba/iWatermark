@@ -66,10 +66,11 @@ namespace iWatermark.Controllers
 
             List<byte[]> processedImages = new List<byte[]>();
 
-            Parallel.ForEach(watermark.Images, image =>
+            // Preserve order without sharing a mutable list or native image across workers.
+            foreach (var image in watermark.Images)
             {
                 ProcessImage(image, logoImage, watermark.ParametrosWaterMark, processedImages);
-            });
+            }
 
             return processedImages;
         }
@@ -80,7 +81,7 @@ namespace iWatermark.Controllers
 
             double maxLogoSize = GetMaxLogoSize(imageToWatermark, parametrosWaterMark);
             double iWatermarkScale = GetiWatermarkScale(maxLogoSize, logoImage);
-            IMagickImage<ushort> watermarkClone = GetResizediWatermark(iWatermarkScale, logoImage);
+            using var watermarkClone = GetResizediWatermark(iWatermarkScale, logoImage);
 
             SetOpacityToiWatermark(watermarkClone, parametrosWaterMark.OpacidadeLogomarca);
 
@@ -105,8 +106,8 @@ namespace iWatermark.Controllers
         {
             IMagickImage<ushort> watermarkClone = logoImage.Clone();
 
-            int scaledWidth = (int)(watermarkClone.Width * iWatermarkScale);
-            int scaledHeight = (int)(watermarkClone.Height * iWatermarkScale);
+            uint scaledWidth = checked((uint)(watermarkClone.Width * iWatermarkScale));
+            uint scaledHeight = checked((uint)(watermarkClone.Height * iWatermarkScale));
             watermarkClone.Resize(scaledWidth, scaledHeight);
 
             return watermarkClone;
@@ -116,23 +117,25 @@ namespace iWatermark.Controllers
         {
             int imgX = 0;
             int imgY = 0;
+            int offsetX = checked((int)imageToWatermark.Width - (int)watermarkClone.Width);
+            int offsetY = checked((int)imageToWatermark.Height - (int)watermarkClone.Height);
             
             switch (parametrosWaterMark.PosicaoLogomarca)
             {                
                 case PosicaoLogomarcaEnum.Centro:
-                    imgX = (imageToWatermark.Width - watermarkClone.Width) / 2;
-                    imgY = (imageToWatermark.Height - watermarkClone.Height) / 2;
+                    imgX = offsetX / 2;
+                    imgY = offsetY / 2;
                     break;
                 case PosicaoLogomarcaEnum.DireitaInferior:
-                    imgX = imageToWatermark.Width - watermarkClone.Width;
-                    imgY = imageToWatermark.Height - watermarkClone.Height;
+                    imgX = offsetX;
+                    imgY = offsetY;
                     break;
                 case PosicaoLogomarcaEnum.EsquerdaInferior:
                     imgX = 0;
-                    imgY = imageToWatermark.Height - watermarkClone.Height;
+                    imgY = offsetY;
                     break;
                 case PosicaoLogomarcaEnum.DireitaSuperior:
-                    imgX = imageToWatermark.Width - watermarkClone.Width;
+                    imgX = offsetX;
                     imgY = 0;
                     break;
                 case PosicaoLogomarcaEnum.EsquerdaSuperior:
@@ -156,7 +159,7 @@ namespace iWatermark.Controllers
             imageToWatermark.Composite(watermarkClone, imgCenterX, imgCenterY, compositeOperator);
         }
 
-        private byte[] GetNewImage(IMagickImage<ushort> imageToWatermark, int quality, MagickFormat imgFormat)
+        private byte[] GetNewImage(IMagickImage<ushort> imageToWatermark, uint quality, MagickFormat imgFormat)
         {
             using var outputImageStream = new MemoryStream();
 
