@@ -8,6 +8,8 @@
 
 Seja bem-vindo ao iWatermark, um aplicativo intuitivo para adicionar logomarca a várias fotos simultaneamente.
 
+O iWatermark reaproveita a logomarca preparada quando várias fotos de um lote usam o mesmo tamanho de marca.
+
 **Para experimentar o sistema, acesse: [iwatermark.allandeba.dev.br](https://iwatermark.allandeba.dev.br)**
 
 ## Configurações Personalizadas
