@@ -165,6 +165,12 @@ namespace iWatermark.Controllers
 
             imageToWatermark.Quality = quality;
             imageToWatermark.Format = imgFormat;
+            if (imgFormat == MagickFormat.Png)
+            {
+                // Keep the existing PNG filter and reduce lossless compression effort.
+                imageToWatermark.Settings.SetDefine(MagickFormat.Png, "compression-level", 3);
+            }
+
             imageToWatermark.Write(outputImageStream);
 
             return outputImageStream.ToArray();
@@ -178,7 +184,7 @@ namespace iWatermark.Controllers
 
             for (int i = 0; i < images.Count; i++)
             {
-                var entry = archive.CreateEntry($"image{i}.png");
+                var entry = archive.CreateEntry($"image{i}.png", CompressionLevel.NoCompression);
                 using var entryStream = entry.Open();
                 entryStream.Write(images[i], 0, images[i].Length);
             }

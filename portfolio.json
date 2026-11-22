@@ -1,16 +1,16 @@
 {
   "title": "iWatermark — Adição de logomarca em imagens em lote",
-  "impact": "↑ 500+ imagens processadas em segundos via paralelismo",
+  "impact": "Exporta lotes de 501 imagens em PNG sem perda, reunidas em um ZIP",
   "techStack": [
     "C#",
-    "System.Drawing",
-    "Parallel"
+    "ASP.NET Core",
+    "Magick.NET"
   ],
   "diff": {
     "before": "edição manual imagem por imagem",
     "added": [
-      "Processamento paralelo, centenas de imagens em segundos",
-      "Suporte a PNG, JPG, BMP e WebP",
+      "Compressão PNG sem perda ajustada para exportar mais rápido",
+      "Entrada em PNG, JPG, BMP e WebP e saída em PNG",
       "Marca d'água: posição, opacidade e escala configuráveis"
     ]
   }
