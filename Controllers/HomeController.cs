@@ -8,6 +8,9 @@ namespace iWatermark.Controllers
 {
     public class HomeController : Controller
     {
+        private const int MaxCachedWatermarks = 8;
+        private const ulong MaxCachedWatermarkPixels = 1_000_000;
+
         private readonly ILogger<HomeController> _logger;
 
         public HomeController(ILogger<HomeController> logger)
@@ -61,35 +64,61 @@ namespace iWatermark.Controllers
 
         private List<byte[]> GetProcessedImages(Watermark watermark)
         {
-            using var logoImage = new MagickImage(watermark.Logomarca.OpenReadStream());
+            using var logoStream = watermark.Logomarca.OpenReadStream();
+            using var logoImage = new MagickImage(logoStream);
             logoImage.Format = MagickFormat.Svg;
 
-            List<byte[]> processedImages = new List<byte[]>();
+            var parameters = watermark.ParametrosWaterMark;
+            var processedImages = new List<byte[]>();
+            var preparedWatermarks = new Dictionary<(uint Width, uint Height), IMagickImage<ushort>>();
+            ulong cachedPixels = 0;
 
-            // Preserve order without sharing a mutable list or native image across workers.
-            foreach (var image in watermark.Images)
+            try
             {
-                ProcessImage(image, logoImage, watermark.ParametrosWaterMark, processedImages);
-            }
+                foreach (var image in watermark.Images)
+                {
+                    using var imageStream = image.OpenReadStream();
+                    using var imageToWatermark = new MagickImage(imageStream);
+                    var scale = GetiWatermarkScale(GetMaxLogoSize(imageToWatermark, parameters), logoImage);
+                    var size = (Width: checked((uint)(logoImage.Width * scale)), Height: checked((uint)(logoImage.Height * scale)));
 
-            return processedImages;
+                    if (!preparedWatermarks.TryGetValue(size, out var preparedWatermark))
+                    {
+                        preparedWatermark = PrepareWatermark(logoImage, size, parameters.OpacidadeLogomarca);
+                        var pixelCount = (ulong)size.Width * size.Height;
+                        if (preparedWatermarks.Count >= MaxCachedWatermarks || pixelCount > MaxCachedWatermarkPixels - cachedPixels)
+                        {
+                            using (preparedWatermark)
+                            {
+                                processedImages.Add(ProcessImage(imageToWatermark, preparedWatermark, parameters));
+                            }
+
+                            continue;
+                        }
+
+                        preparedWatermarks.Add(size, preparedWatermark);
+                        cachedPixels += pixelCount;
+                    }
+
+                    processedImages.Add(ProcessImage(imageToWatermark, preparedWatermark, parameters));
+                }
+
+                return processedImages;
+            }
+            finally
+            {
+                foreach (var preparedWatermark in preparedWatermarks.Values)
+                {
+                    preparedWatermark.Dispose();
+                }
+            }
         }
 
-        private void ProcessImage(IFormFile image, IMagickImage<ushort> logoImage, ParametrosWaterMark parametrosWaterMark, List<byte[]> processedImages)
+        private byte[] ProcessImage(MagickImage imageToWatermark, IMagickImage<ushort> preparedWatermark, ParametrosWaterMark parameters)
         {
-            using var imageToWatermark = new MagickImage(image.OpenReadStream());
-
-            double maxLogoSize = GetMaxLogoSize(imageToWatermark, parametrosWaterMark);
-            double iWatermarkScale = GetiWatermarkScale(maxLogoSize, logoImage);
-            using var watermarkClone = GetResizediWatermark(iWatermarkScale, logoImage);
-
-            SetOpacityToiWatermark(watermarkClone, parametrosWaterMark.OpacidadeLogomarca);
-
-            var watermarkPosition = GetWatermarkPosition(imageToWatermark, watermarkClone, parametrosWaterMark);
-            ComposeiWatermarkToImage(imageToWatermark, watermarkClone, watermarkPosition.X, watermarkPosition.Y, CompositeOperator.Over);
-
-            byte[] newImg = GetNewImage(imageToWatermark, 100, FormatoSaidaEnumClass.GetMagickFormat(parametrosWaterMark.FormatoSaida));
-            processedImages.Add(newImg);
+            var position = GetWatermarkPosition(imageToWatermark, preparedWatermark, parameters);
+            ComposeiWatermarkToImage(imageToWatermark, preparedWatermark, position.X, position.Y, CompositeOperator.Over);
+            return GetNewImage(imageToWatermark, 100, FormatoSaidaEnumClass.GetMagickFormat(parameters.FormatoSaida));
         }
 
         private double GetMaxLogoSize(MagickImage imageToWatermark, ParametrosWaterMark parametrosWaterMark)
@@ -102,15 +131,20 @@ namespace iWatermark.Controllers
             return Math.Min(maxLogoSize / logoImage.Width, maxLogoSize / logoImage.Height);
         }
 
-        private IMagickImage<ushort> GetResizediWatermark(double iWatermarkScale, IMagickImage<ushort> logoImage)
+        private IMagickImage<ushort> PrepareWatermark(IMagickImage<ushort> logoImage, (uint Width, uint Height) size, int opacity)
         {
-            IMagickImage<ushort> watermarkClone = logoImage.Clone();
-
-            uint scaledWidth = checked((uint)(watermarkClone.Width * iWatermarkScale));
-            uint scaledHeight = checked((uint)(watermarkClone.Height * iWatermarkScale));
-            watermarkClone.Resize(scaledWidth, scaledHeight);
-
-            return watermarkClone;
+            var preparedWatermark = logoImage.Clone();
+            try
+            {
+                preparedWatermark.Resize(size.Width, size.Height);
+                SetOpacityToiWatermark(preparedWatermark, opacity);
+                return preparedWatermark;
+            }
+            catch
+            {
+                preparedWatermark.Dispose();
+                throw;
+            }
         }
 
         private (int X, int Y) GetWatermarkPosition(IMagickImage<ushort> imageToWatermark, IMagickImage<ushort> watermarkClone, ParametrosWaterMark parametrosWaterMark)
